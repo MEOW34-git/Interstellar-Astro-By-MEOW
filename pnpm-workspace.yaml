@@ -1,0 +1,5 @@
+allowBuilds:
+  '@mercuryworkshop/scramjet': true
+  bufferutil: true
+  esbuild: true
+  sharp: true
