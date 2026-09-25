@@ -13,6 +13,7 @@ const IconButton = ({ onClick, icon: Icon, className = "", disabled = false, tit
 export default function Browser() {
   const [tabs, setTabs] = useState<Tab[]>([{ id: 1, title: "Tab 1", url: "about:blank", active: true, reloadKey: 0 }]);
   const [url, setUrl] = useState("about:blank");
+  const [isEditingUrl, setIsEditingUrl] = useState(false);
   const [favicons, setFavicons] = useState<Record<number, string>>({});
   const [bookmarks, setBookmarks] = useState<Array<{ Title: string; url: string; favicon?: string }>>([]);
   const [_proxyReadyTick, setProxyReadyTick] = useState(0);
@@ -81,15 +82,13 @@ export default function Browser() {
   useEffect(() => {
     if (!activeTab) return;
     const iframe = iframeRefs.current[activeTab.id];
-    const actualUrl = getActualUrl(iframe);
-    const nextUrl = actualUrl && actualUrl !== "about:blank" ? actualUrl : activeTab.url;
-    setUrl(nextUrl);
-  }, [activeTab]);
+    if (!iframe) return;
 
-  useEffect(() => {
-    if (!activeTab) return;
-    if (url === "about:blank" && activeTab.url !== "about:blank") {
-      setUrl(activeTab.url);
+    const actualUrl = getActualUrl(iframe);
+    if (!actualUrl || actualUrl === "about:blank") return;
+
+    if (url === "about:blank") {
+      setUrl(actualUrl);
     }
   }, [activeTab, url]);
 
@@ -101,10 +100,8 @@ export default function Browser() {
     let observer: MutationObserver | null = null;
 
     const updateState = () => {
-      const actualUrl = getActualUrl(iframe);
-      if (actualUrl && actualUrl !== "about:blank" && actualUrl !== url) setUrl(actualUrl);
-
       try {
+        const actualUrl = getActualUrl(iframe);
         const iframeTitle = iframe.contentWindow?.document?.title;
         if (iframeTitle && iframeTitle !== activeTab.title) {
           setTabs((prev) => prev.map((tab) => (tab.id === activeTab.id ? { ...tab, title: iframeTitle } : tab)));
@@ -166,7 +163,7 @@ export default function Browser() {
       iframe.removeEventListener("load", handleLoad);
       observer?.disconnect();
     };
-  }, [activeTab, url]);
+  }, [activeTab, isEditingUrl, url]);
 
   useEffect(() => {
     if (!activeTab) return;
@@ -306,7 +303,11 @@ export default function Browser() {
   }, []);
 
   const setActiveTab = (id: number) => {
-    setTabs((prev) => prev.map((tab) => ({ ...tab, active: tab.id === id })));
+    setTabs((prev) => {
+      const target = prev.find((tab) => tab.id === id);
+      if (target) setUrl(target.url);
+      return prev.map((tab) => ({ ...tab, active: tab.id === id }));
+    });
   };
 
   const addNewTab = () => {
@@ -343,6 +344,7 @@ export default function Browser() {
     if (!activeTab) return;
     const formattedUrl = formatUrl(value);
     setTabs((prev) => prev.map((tab) => (tab.id === activeTab.id ? { ...tab, url: formattedUrl, reloadKey: tab.reloadKey + 1 } : tab)));
+    setIsEditingUrl(false);
     setUrl(formattedUrl);
   };
 
@@ -455,7 +457,18 @@ export default function Browser() {
         <div className="flex-1">
           <div className={actionBarClass}>
             <Lock className="h-3.5 w-3.5 text-text-placeholder" />
-            <input className={addressInputClass} value={url} placeholder="Search or enter address" onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleNavigate(e.currentTarget.value)} />
+            <input
+              className={addressInputClass}
+              value={url}
+              placeholder="Search or enter address"
+              onFocus={() => setIsEditingUrl(true)}
+              onBlur={() => {
+                setIsEditingUrl(false);
+                setUrl(activeTab?.url ?? "about:blank");
+              }}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleNavigate(e.currentTarget.value)}
+            />
           </div>
         </div>
 

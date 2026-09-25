@@ -5,6 +5,7 @@ import fs from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Socket } from "node:net";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import zlib from "node:zlib";
 
 EventEmitter.defaultMaxListeners = 50;
@@ -33,10 +34,10 @@ async function Start() {
 
     if (FirstRun) {
       console.log("Restarting Server...");
-      const disable = spawn("pnpm", ["disable"], { stdio: "inherit" });
+      const disable = spawn(process.platform === "win32" ? "npx.cmd" : "npx", ["astro", "telemetry", "disable"], { stdio: "inherit" });
       disable.on("close", (code) => {
         if (code === 0) {
-          const start = spawn("pnpm", ["start"], { stdio: "inherit" });
+          const start = spawn(process.platform === "win32" ? "npm.cmd" : "npm", ["start"], { stdio: "inherit" });
           start.on("close", () => process.exit(0));
         } else {
           process.exit(code ?? 1);
@@ -314,7 +315,12 @@ self.addEventListener("fetch", (event) => {
     done();
   });
 
-  const { handler } = (await import("./dist/server/entry.mjs")) as {
+  const distServerEntry = path.join(import.meta.dirname, "dist", "server", "entry.mjs");
+  if (!fs.existsSync(distServerEntry)) {
+    throw new Error(`Astro server entry not found: ${distServerEntry}. The build may have failed or been interrupted.`);
+  }
+
+  const { handler } = (await import(pathToFileURL(distServerEntry).href)) as {
     handler: (req: unknown, res: unknown, next?: () => void) => void;
   };
   await app
